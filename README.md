@@ -33,7 +33,13 @@ The binary will be at `target/release/cc_sline`.
 
 ## Install
 
-Install to `~/.local/bin`:
+Install from GitHub:
+
+```bash
+cargo install --git https://github.com/byplayer/claude_code_statusline.git --root ~/.local
+```
+
+Or install to `~/.local/bin` from local source:
 
 ```bash
 cargo install --path . --root ~/.local
