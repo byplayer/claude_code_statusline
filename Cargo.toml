@@ -3,6 +3,7 @@ name = "cc_sline"
 version = "0.1.0"
 edition = "2021"
 description = "Claude Code status line generator"
+license = "MIT"
 
 [[bin]]
 name = "cc_sline"
