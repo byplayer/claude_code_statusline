@@ -1,0 +1,13 @@
+[package]
+name = "cc_sline"
+version = "0.1.0"
+edition = "2021"
+description = "Claude Code status line generator"
+
+[[bin]]
+name = "cc_sline"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
