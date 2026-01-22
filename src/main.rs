@@ -2,6 +2,9 @@ use serde::Deserialize;
 use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Deserialize, Default)]
 struct Model {
@@ -137,17 +140,40 @@ fn build_status_line(input: &str) -> Result<String, serde_json::Error> {
     ))
 }
 
-fn main() {
-    let mut input = String::new();
-    if let Err(e) = io::stdin().read_to_string(&mut input) {
-        eprintln!("Error reading stdin: {}", e);
-        std::process::exit(1);
+fn read_stdin_with_timeout(timeout: Duration) -> Result<String, String> {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let mut input = String::new();
+        let result = io::stdin().read_to_string(&mut input);
+        let _ = tx.send(result.map(|_| input));
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(Ok(input)) => Ok(input),
+        Ok(Err(e)) => Err(format!("Error reading stdin: {}", e)),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            Err("Error: No input received within 3 seconds".to_string())
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            Err("Error: stdin reader unexpectedly disconnected".to_string())
+        }
     }
+}
+
+fn main() {
+    let input = match read_stdin_with_timeout(Duration::from_secs(3)) {
+        Ok(input) => input,
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
 
     match build_status_line(&input) {
         Ok(status_line) => println!("{}", status_line),
         Err(e) => {
-            eprintln!("Error parsing JSON: {}", e);
+            eprintln!("Error: Invalid JSON format - {}", e);
             std::process::exit(1);
         }
     }
