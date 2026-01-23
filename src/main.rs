@@ -1,3 +1,4 @@
+use chrono::Local;
 use serde::Deserialize;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
@@ -5,7 +6,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 fn debug_log(message: &str) {
     if std::env::var("STATUSLINE_DEBUG").is_err() {
@@ -19,11 +20,7 @@ fn debug_log(message: &str) {
 
     let log_path = format!("{}/.claude/status_line_debug.log", home);
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
     let pid = std::process::id();
 
     if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_path) {
