@@ -1,10 +1,32 @@
+use chrono::Local;
 use serde::Deserialize;
-use std::io::{self, Read};
+use std::fs::OpenOptions;
+use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
+
+fn debug_log(message: &str) {
+    if std::env::var("STATUSLINE_DEBUG").is_err() {
+        return;
+    }
+
+    let home = match std::env::var("HOME") {
+        Ok(h) => h,
+        Err(_) => return,
+    };
+
+    let log_path = format!("{}/.claude/status_line_debug.log", home);
+
+    let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let pid = std::process::id();
+
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_path) {
+        let _ = writeln!(file, "[{} pid:{}] {}", timestamp, pid, message);
+    }
+}
 
 #[derive(Deserialize, Default)]
 struct Model {
@@ -29,7 +51,7 @@ struct ContextWindow {
     current_usage: Option<CurrentUsage>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct StatusData {
     model: Option<Model>,
     workspace: Option<Workspace>,
@@ -38,13 +60,17 @@ struct StatusData {
 }
 
 fn get_git_branch(dir: &str) -> Option<String> {
+    debug_log(&format!("get_git_branch: dir={}", dir));
+
     // Try symbolic-ref first (works even without commits)
+    debug_log("git symbolic-ref start");
     let output = Command::new("git")
         .args(["symbolic-ref", "--short", "HEAD"])
         .current_dir(dir)
         .stderr(std::process::Stdio::null())
         .output()
         .ok()?;
+    debug_log("git symbolic-ref done");
 
     if output.status.success() {
         let branch = String::from_utf8_lossy(&output.stdout)
@@ -56,12 +82,14 @@ fn get_git_branch(dir: &str) -> Option<String> {
     }
 
     // Fallback to rev-parse (for detached HEAD)
+    debug_log("git rev-parse start");
     let output = Command::new("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(dir)
         .stderr(std::process::Stdio::null())
         .output()
         .ok()?;
+    debug_log("git rev-parse done");
 
     if output.status.success() {
         let branch = String::from_utf8_lossy(&output.stdout)
@@ -84,8 +112,12 @@ fn format_token_count(tokens: u64) -> String {
     }
 }
 
-fn build_status_line(input: &str) -> Result<String, serde_json::Error> {
-    let data: StatusData = serde_json::from_str(input)?;
+fn build_status_line(input: &str) -> String {
+    let data: StatusData = if input.trim().is_empty() {
+        StatusData::default()
+    } else {
+        serde_json::from_str(input).unwrap_or_default()
+    };
 
     let model = data
         .model
@@ -134,10 +166,10 @@ fn build_status_line(input: &str) -> Result<String, serde_json::Error> {
         "\x1b[32m" // Green
     };
 
-    Ok(format!(
+    format!(
         "\u{1F916} {} | \u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
         model, current_dir, git_branch, token_display, percentage_color, percentage
-    ))
+    )
 }
 
 fn read_stdin_with_timeout(timeout: Duration) -> Result<String, String> {
@@ -162,21 +194,27 @@ fn read_stdin_with_timeout(timeout: Duration) -> Result<String, String> {
 }
 
 fn main() {
+    debug_log("=== START ===");
+
+    debug_log("waiting for stdin...");
     let input = match read_stdin_with_timeout(Duration::from_secs(3)) {
-        Ok(input) => input,
+        Ok(input) => {
+            debug_log(&format!("stdin received: {} bytes", input.len()));
+            input
+        }
         Err(e) => {
+            debug_log(&format!("stdin error: {}", e));
             eprintln!("{}", e);
             std::process::exit(1);
         }
     };
 
-    match build_status_line(&input) {
-        Ok(status_line) => println!("{}", status_line),
-        Err(e) => {
-            eprintln!("Error: Invalid JSON format - {}", e);
-            std::process::exit(1);
-        }
-    }
+    debug_log("building status line...");
+    let result = build_status_line(&input);
+    debug_log("status line built");
+
+    println!("{}", result);
+    debug_log("=== END ===");
 }
 
 #[cfg(test)]
@@ -220,7 +258,7 @@ mod tests {
             }
         }"#;
 
-        let result = build_status_line(input).unwrap();
+        let result = build_status_line(input);
         assert!(result.contains("🤖 Claude Opus"));
         assert!(result.contains("📁 tmp"));
         assert!(result.contains("🪙 65.0K"));
@@ -237,7 +275,7 @@ mod tests {
             }
         }"#;
 
-        let result = build_status_line(input).unwrap();
+        let result = build_status_line(input);
         assert!(result.contains("🤖 Unknown"));
     }
 
@@ -253,7 +291,7 @@ mod tests {
             }
         }"#;
 
-        let result = build_status_line(input).unwrap();
+        let result = build_status_line(input);
         assert!(result.contains("📁 project"));
     }
 
@@ -267,7 +305,7 @@ mod tests {
                 "current_usage": {"input_tokens": 10000}
             }
         }"#;
-        let result = build_status_line(input_green).unwrap();
+        let result = build_status_line(input_green);
         assert!(result.contains("\x1b[32m")); // Green
 
         // Yellow (70-89%)
@@ -278,7 +316,7 @@ mod tests {
                 "current_usage": {"input_tokens": 60000}
             }
         }"#;
-        let result = build_status_line(input_yellow).unwrap();
+        let result = build_status_line(input_yellow);
         assert!(result.contains("\x1b[33m")); // Yellow
 
         // Red (>= 90%)
@@ -289,14 +327,35 @@ mod tests {
                 "current_usage": {"input_tokens": 75000}
             }
         }"#;
-        let result = build_status_line(input_red).unwrap();
+        let result = build_status_line(input_red);
         assert!(result.contains("\x1b[31m")); // Red
     }
 
     #[test]
     fn test_build_status_line_invalid_json() {
         let input = "not valid json";
-        assert!(build_status_line(input).is_err());
+        let result = build_status_line(input);
+        // Invalid JSON should return default values
+        assert!(result.contains("🤖 Unknown"));
+        assert!(result.contains("📁 ."));
+        assert!(result.contains("🪙 0"));
+        assert!(result.contains("0%"));
+    }
+
+    #[test]
+    fn test_build_status_line_empty_input() {
+        let result = build_status_line("");
+        assert!(result.contains("🤖 Unknown"));
+        assert!(result.contains("📁 ."));
+        assert!(result.contains("🪙 0"));
+        assert!(result.contains("0%"));
+    }
+
+    #[test]
+    fn test_build_status_line_whitespace_input() {
+        let result = build_status_line("   \n\t  ");
+        assert!(result.contains("🤖 Unknown"));
+        assert!(result.contains("📁 ."));
     }
 
     #[test]
@@ -306,7 +365,7 @@ mod tests {
             "cwd": "/tmp"
         }"#;
 
-        let result = build_status_line(input).unwrap();
+        let result = build_status_line(input);
         assert!(result.contains("🪙 0"));
         assert!(result.contains("0%"));
     }
