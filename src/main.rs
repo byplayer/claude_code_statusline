@@ -8,6 +8,34 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
+const MAX_LOG_SIZE: u64 = 1_048_576; // 1MB
+const MAX_LOG_FILES: u32 = 5;
+
+fn rotate_log(log_path: &str) {
+    let size = match std::fs::metadata(log_path) {
+        Ok(m) => m.len(),
+        Err(_) => return,
+    };
+
+    if size < MAX_LOG_SIZE {
+        return;
+    }
+
+    // Delete the oldest log file
+    let oldest = format!("{}.{}", log_path, MAX_LOG_FILES);
+    let _ = std::fs::remove_file(&oldest);
+
+    // Rename .log.{n-1} -> .log.{n} (from highest to lowest)
+    for n in (2..=MAX_LOG_FILES).rev() {
+        let from = format!("{}.{}", log_path, n - 1);
+        let to = format!("{}.{}", log_path, n);
+        let _ = std::fs::rename(&from, &to);
+    }
+
+    // Rename .log -> .log.1
+    let _ = std::fs::rename(log_path, format!("{}.1", log_path));
+}
+
 fn debug_log(message: &str) {
     if std::env::var("STATUSLINE_DEBUG").is_err() {
         return;
@@ -19,6 +47,8 @@ fn debug_log(message: &str) {
     };
 
     let log_path = format!("{}/.claude/status_line_debug.log", home);
+
+    rotate_log(&log_path);
 
     let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
     let pid = std::process::id();
