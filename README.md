@@ -90,6 +90,24 @@ echo '{"model":{"display_name":"Claude Opus"},"cwd":"/path/to/project","context_
 - `workspace.current_dir` takes precedence over `cwd`
 - All fields are optional (defaults to "Unknown" model, "." directory, 0 tokens)
 
+## Debug Logging
+
+Set the `STATUSLINE_DEBUG` environment variable to enable debug logging:
+
+```bash
+STATUSLINE_DEBUG=1 claude
+```
+
+Logs are written to `~/.claude/status_line_debug.log` with the following format:
+
+```text
+[2025-02-07 14:30:45.123 pid:12345] message text here
+```
+
+Each entry includes a timestamp, process ID, and message. The log tracks stdin reading, git branch detection, and status line building operations.
+
+Log files are automatically rotated when the size exceeds 1MB. Up to 5 rotated files are kept (`status_line_debug.log.1` through `status_line_debug.log.5`), with older files being deleted.
+
 ## License
 
 MIT
