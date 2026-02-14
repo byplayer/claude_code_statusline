@@ -90,6 +90,22 @@ echo '{"model":{"display_name":"Claude Opus"},"cwd":"/path/to/project","context_
 - `workspace.current_dir` takes precedence over `cwd`
 - All fields are optional (defaults to "Unknown" model, "." directory, 0 tokens)
 
+## Environment Variables
+
+### `CC_STATUSLINE_NO_MODEL`
+
+Set to `1` to hide the model name from the status line output.
+
+```bash
+CC_STATUSLINE_NO_MODEL=1 claude
+```
+
+Output without model:
+
+```text
+📁 my-project | 🌿 main | 🪙 65.0K | 40%
+```
+
 ## Debug Logging
 
 Set the `STATUSLINE_DEBUG` environment variable to enable debug logging:

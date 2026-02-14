@@ -143,6 +143,13 @@ fn format_token_count(tokens: u64) -> String {
 }
 
 fn build_status_line(input: &str) -> String {
+    let show_model = std::env::var("CC_STATUSLINE_NO_MODEL")
+        .map(|v| v != "1")
+        .unwrap_or(true);
+    build_status_line_impl(input, show_model)
+}
+
+fn build_status_line_impl(input: &str, show_model: bool) -> String {
     let data: StatusData = if input.trim().is_empty() {
         StatusData::default()
     } else {
@@ -196,10 +203,17 @@ fn build_status_line(input: &str) -> String {
         "\x1b[32m" // Green
     };
 
-    format!(
-        "\u{1F916} {} | \u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
-        model, current_dir, git_branch, token_display, percentage_color, percentage
-    )
+    if show_model {
+        format!(
+            "\u{1F916} {} | \u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
+            model, current_dir, git_branch, token_display, percentage_color, percentage
+        )
+    } else {
+        format!(
+            "\u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
+            current_dir, git_branch, token_display, percentage_color, percentage
+        )
+    }
 }
 
 fn read_stdin_with_timeout(timeout: Duration) -> Result<String, String> {
@@ -398,6 +412,28 @@ mod tests {
         let result = build_status_line(input);
         assert!(result.contains("🪙 0"));
         assert!(result.contains("0%"));
+    }
+
+    #[test]
+    fn test_build_status_line_no_model() {
+        let input = r#"{
+            "model": {"display_name": "Claude Opus"},
+            "cwd": "/tmp",
+            "context_window": {
+                "context_window_size": 200000,
+                "current_usage": {
+                    "input_tokens": 50000,
+                    "cache_creation_input_tokens": 10000,
+                    "cache_read_input_tokens": 5000
+                }
+            }
+        }"#;
+
+        let result = build_status_line_impl(input, false);
+        assert!(!result.contains("🤖"));
+        assert!(!result.contains("Claude Opus"));
+        assert!(result.starts_with("📁 tmp"));
+        assert!(result.contains("🪙 65.0K"));
     }
 
     #[test]
