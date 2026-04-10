@@ -82,11 +82,17 @@ struct ContextWindow {
 }
 
 #[derive(Deserialize, Default)]
+struct Cost {
+    total_cost_usd: Option<f64>,
+}
+
+#[derive(Deserialize, Default)]
 struct StatusData {
     model: Option<Model>,
     workspace: Option<Workspace>,
     cwd: Option<String>,
     context_window: Option<ContextWindow>,
+    cost: Option<Cost>,
 }
 
 fn get_git_branch(dir: &str) -> Option<String> {
@@ -177,6 +183,9 @@ fn build_status_line_impl(input: &str, show_model: bool) -> String {
         .map(|b| format!(" | \u{1F33F} {}", b))
         .unwrap_or_default();
 
+    let cost_usd = data.cost.and_then(|c| c.total_cost_usd).unwrap_or(0.0);
+    let cost_display = format!("💰 ${:.2}", cost_usd);
+
     let context_window = data.context_window.unwrap_or_default();
     let context_size = context_window.context_window_size.unwrap_or(0);
     let current_usage = context_window.current_usage.unwrap_or_default();
@@ -205,13 +214,13 @@ fn build_status_line_impl(input: &str, show_model: bool) -> String {
 
     if show_model {
         format!(
-            "\u{1F916} {} | \u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
-            model, current_dir, git_branch, token_display, percentage_color, percentage
+            "\u{1F916} {} | \u{1F4C1} {}{} | {} | \u{1FA99} {} | {}{}%\x1b[0m",
+            model, current_dir, git_branch, cost_display, token_display, percentage_color, percentage
         )
     } else {
         format!(
-            "\u{1F4C1} {}{} | \u{1FA99} {} | {}{}%\x1b[0m",
-            current_dir, git_branch, token_display, percentage_color, percentage
+            "\u{1F4C1} {}{} | {} | \u{1FA99} {} | {}{}%\x1b[0m",
+            current_dir, git_branch, cost_display, token_display, percentage_color, percentage
         )
     }
 }
@@ -434,6 +443,77 @@ mod tests {
         assert!(!result.contains("Claude Opus"));
         assert!(result.starts_with("📁 tmp"));
         assert!(result.contains("🪙 65.0K"));
+    }
+
+    #[test]
+    fn test_build_status_line_cost_display() {
+        let input = r#"{
+            "model": {"display_name": "Claude Opus"},
+            "cwd": "/tmp",
+            "cost": {"total_cost_usd": 0.0123},
+            "context_window": {
+                "context_window_size": 100000,
+                "current_usage": {"input_tokens": 1000}
+            }
+        }"#;
+
+        let result = build_status_line_impl(input, true);
+        assert!(result.contains("💰 $0.01"));
+    }
+
+    #[test]
+    fn test_build_status_line_cost_zero_when_missing() {
+        let input = r#"{
+            "model": {"display_name": "Claude Opus"},
+            "cwd": "/tmp",
+            "context_window": {
+                "context_window_size": 100000,
+                "current_usage": {"input_tokens": 1000}
+            }
+        }"#;
+
+        let result = build_status_line_impl(input, true);
+        assert!(result.contains("💰 $0.00"));
+    }
+
+    #[test]
+    fn test_build_status_line_cost_after_branch() {
+        let input = r#"{
+            "model": {"display_name": "Claude Opus"},
+            "cwd": "/tmp",
+            "cost": {"total_cost_usd": 1.5},
+            "context_window": {
+                "context_window_size": 100000,
+                "current_usage": {"input_tokens": 1000}
+            }
+        }"#;
+
+        let result = build_status_line_impl(input, true);
+        // cost must appear after the directory segment and before the token count
+        let dir_pos = result.find("📁").unwrap();
+        let cost_pos = result.find("💰").unwrap();
+        let token_pos = result.find("🪙").unwrap();
+        assert!(dir_pos < cost_pos, "cost should appear after directory");
+        assert!(cost_pos < token_pos, "cost should appear before token count");
+        assert!(result.contains("💰 $1.50"));
+    }
+
+    #[test]
+    fn test_build_status_line_cost_no_model() {
+        let input = r#"{
+            "model": {"display_name": "Claude Opus"},
+            "cwd": "/tmp",
+            "cost": {"total_cost_usd": 0.5},
+            "context_window": {
+                "context_window_size": 100000,
+                "current_usage": {"input_tokens": 1000}
+            }
+        }"#;
+
+        let result = build_status_line_impl(input, false);
+        assert!(!result.contains("🤖"));
+        assert!(result.contains("💰 $0.50"));
+        assert!(result.starts_with("📁 tmp"));
     }
 
     #[test]
