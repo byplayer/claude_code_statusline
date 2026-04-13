@@ -311,7 +311,7 @@ mod tests {
             }
         }"#;
 
-        let result = build_status_line(input);
+        let result = build_status_line_impl(input, true);
         assert!(result.contains("🤖 Claude Opus"));
         assert!(result.contains("📁 tmp"));
         assert!(result.contains("🪙 65.0K"));
@@ -328,7 +328,7 @@ mod tests {
             }
         }"#;
 
-        let result = build_status_line(input);
+        let result = build_status_line_impl(input, true);
         assert!(result.contains("🤖 Unknown"));
     }
 
@@ -387,7 +387,7 @@ mod tests {
     #[test]
     fn test_build_status_line_invalid_json() {
         let input = "not valid json";
-        let result = build_status_line(input);
+        let result = build_status_line_impl(input, true);
         // Invalid JSON should return default values
         assert!(result.contains("🤖 Unknown"));
         assert!(result.contains("📁 ."));
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn test_build_status_line_empty_input() {
-        let result = build_status_line("");
+        let result = build_status_line_impl("", true);
         assert!(result.contains("🤖 Unknown"));
         assert!(result.contains("📁 ."));
         assert!(result.contains("🪙 0"));
@@ -406,7 +406,7 @@ mod tests {
 
     #[test]
     fn test_build_status_line_whitespace_input() {
-        let result = build_status_line("   \n\t  ");
+        let result = build_status_line_impl("   \n\t  ", true);
         assert!(result.contains("🤖 Unknown"));
         assert!(result.contains("📁 ."));
     }
