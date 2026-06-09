@@ -51,6 +51,41 @@ Or build and copy manually:
 cargo build --release && cp target/release/cc_sline ~/.local/bin/
 ```
 
+## Configure Claude Code
+
+Register the binary as your status line in `.claude/settings.json` (use `~/.claude/settings.json` for global, or `.claude/settings.json` in a project directory):
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "cc_sline"
+  }
+}
+```
+
+If the binary is not on your `PATH`, specify an absolute path instead:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/Users/you/.local/bin/cc_sline"
+  }
+}
+```
+
+To show the model name, set the `CC_STATUSLINE_MODEL` environment variable in the command:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "CC_STATUSLINE_MODEL=1 cc_sline"
+  }
+}
+```
+
 ## Test
 
 ```bash
@@ -92,15 +127,21 @@ echo '{"model":{"display_name":"Claude Opus"},"cwd":"/path/to/project","context_
 
 ## Environment Variables
 
-### `CC_STATUSLINE_NO_MODEL`
+### `CC_STATUSLINE_MODEL`
 
-Set to `1` to hide the model name from the status line output.
+By default, the model name is **not** shown. Set to `1` to display the model name in the status line output.
 
 ```bash
-CC_STATUSLINE_NO_MODEL=1 claude
+CC_STATUSLINE_MODEL=1 claude
 ```
 
-Output without model:
+Output with model:
+
+```text
+🤖 Claude Opus | 📁 my-project | 🌿 main | 🪙 65.0K | 40%
+```
+
+Default output (without model):
 
 ```text
 📁 my-project | 🌿 main | 🪙 65.0K | 40%

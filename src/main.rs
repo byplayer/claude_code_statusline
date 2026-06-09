@@ -149,9 +149,9 @@ fn format_token_count(tokens: u64) -> String {
 }
 
 fn build_status_line(input: &str) -> String {
-    let show_model = std::env::var("CC_STATUSLINE_NO_MODEL")
-        .map(|v| v != "1")
-        .unwrap_or(true);
+    let show_model = std::env::var("CC_STATUSLINE_MODEL")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     build_status_line_impl(input, show_model)
 }
 
